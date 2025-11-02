@@ -1,59 +1,83 @@
-/* Old-professor, hand-made vibe */
+/* Retro green clubhouse theme */
+
 body {
-  background: #faf7ec;                 /* gentle paper tint */
-  color: #111;
-  font-family: "Times New Roman", Times, serif;
   margin: 0;
-  padding: 0.75rem;
+  padding: 20px;
+  background-color: #0b3d0b; /* dark green outer background */
+  font-family: "Times New Roman", Times, serif;
+  color: #111;
 }
 
 #page {
-  width: 760px;                         /* fixed width feels retro */
-  background: #ffffff;
-  border: 1px solid #999;
-  padding: 14px 18px 22px;
-  box-shadow: 0 0 3px rgba(0,0,0,0.08); /* subtle shadow, optional */
+  width: 760px;
+  background-color: #cfe8c4; /* light green inner background */
+  border: 1px solid #666;
+  padding: 18px 20px 22px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.4);
 }
 
 h1 {
   margin: 6px 0 2px;
   font-size: 28px;
-  letter-spacing: 0.2px;
+  color: #052b05;
 }
 
 h2 {
   margin: 18px 0 8px;
   font-size: 20px;
-  border-bottom: 1px solid #bbb;
+  border-bottom: 1px solid #666;
   padding-bottom: 2px;
+  color: #052b05;
 }
 
 hr {
   border: 0;
-  border-top: 1px solid #bbb;
+  border-top: 1px solid #666;
   margin: 12px 0 14px;
 }
 
 .small {
   font-size: 12px;
-  color: #444;
+  color: #222;
   margin: 6px 0;
 }
 
 table.box {
   width: 100%;
-  background: #fffef5;
+  background: #e6f0dc;
 }
 
 table.winners {
   width: 100%;
-  border-collapse: collapse;            /* but keep border="1" in HTML for old feel */
+  border-collapse: collapse;
+  background: #f4faef;
 }
 
 table.winners th, table.winners td {
   font-size: 15px;
+  border-bottom: 1px solid #bbb;
 }
 
-a:link    { color: #0000cc; }           /* classic blue links */
-a:visited { color: #551a8b; }           /* classic purple visited */
+tbody tr:nth-child(even) {
+  background: #e8f5e2;
+}
+
+a:link    { color: #0033cc; }
+a:visited { color: #551a8b; }
 a:hover   { text-decoration: underline; }
+
+/* Highlighted link style for Team Event */
+a.team-link {
+  font-weight: bold;
+  color: #003300;
+  background-color: #c6e2b5;
+  padding: 2px 6px;
+  border: 1px solid #004d00;
+  border-radius: 3px;
+  text-decoration: none;
+}
+
+a.team-link:hover {
+  background-color: #b0d69d;
+  text-decoration: underline;
+}
