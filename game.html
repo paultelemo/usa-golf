@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>USA Jacket Golf – Mini Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<center>
+  <div id="page">
+    <h1>USA Jacket Golf – Mini Golf</h1>
+    <p class="small">Click–drag–release to take a shot. Fewer strokes is better.</p>
+    <hr>
+
+    <div style="margin:8px 0;">
+      <button id="resetBtn">Reset Ball</button>
+      <span class="small" id="strokeLabel" style="margin-left:10px;">Strokes: 0</span>
+      <span class="small" id="statusLabel" style="margin-left:14px;"></span>
+    </div>
+
+    <canvas id="course" width="640" height="360"
+            style="border:1px solid #666; background:#cfe8c4; max-width:100%;"></canvas>
+
+    <hr>
+    <p class="small">
+      <a href="./index.html">Main Event</a> |
+      <a href="./team.html">Team Event</a> |
+      <a href="./game.html"><b>Mini Golf Game</b></a>
+    </p>
+  </div>
+</center>
+
+<script>
+(function(){
+  const canvas = document.getElementById('course');
+  const ctx = canvas.getContext('2d');
+
+  // Course dimensions
+  const W = canvas.width;
+  const H = canvas.height;
+
+  // Hole settings
+  const hole = { x: W - 120, y: H/2, r: 14 };
+
+  // Ball settings
+  const ball = { x: 120, y: H/2, r: 7, vx: 0, vy: 0 };
+
+  // Physics
+  const friction = 0.985;     // how quickly velocity decays each frame
+  const wallBounce = 0.85;    // energy retained after a wall bounce
+  const speedCap = 12;        // max initial speed
+  const stopEps = 0.05;       // when to consider the ball stopped
+
+  // Input/aiming
+  let isDragging = false;
+  let dragStart = { x: 0, y: 0 };
+  let strokes = 0;
+  let inHole = false;
+
+  const strokeLabel = document.getElementById('strokeLabel');
+  const statusLabel = document.getElementById('statusLabel');
+  const resetBtn = document.getElementById('resetBtn');
+  resetBtn.addEventListener('click', resetBall);
+
+  function resetBall(){
+    ball.x = 120; ball.y = H/2;
+    ball.vx = 0; ball.vy = 0;
+    strokes = 0;
+    inHole = false;
+    statusLabel.textContent = '';
+    strokeLabel.textContent = 'Strokes: ' + strokes;
+  }
+
+  // Mouse helpers
+  function getMousePos(evt){
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+      y: (evt.clientY - rect.top)  * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (inHole) return;                  // no shots after you’ve holed out
+    // only allow new shot when ball is basically stopped
+    if (Math.hypot(ball.vx, ball.vy) < 0.2) {
+      isDragging = true;
+      dragStart = getMousePos(e);
+    }
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (!isDragging || inHole) return;
+    const end = getMousePos(e);
+    // Aim: drag from ball toward opposite of drag vector (like pulling a putter back)
+    const ax = dragStart.x - end.x;
+    const ay = dragStart.y - end.y;
+
+    // Only shoot if mouse started near the ball
+    if (Math.hypot(dragStart.x - ball.x, dragStart.y - ball.y) <= ball.r + 16) {
+      let vx = ax * 0.08;
+      let vy = ay * 0.08;
+      // Cap initial speed
+      const sp = Math.hypot(vx, vy);
+      if (sp > speedCap) {
+        vx = vx * (speedCap / sp);
+        vy = vy * (speedCap / sp);
+      }
+      ball.vx = vx;
+      ball.vy = vy;
+      strokes += 1;
+      strokeLabel.textContent = 'Strokes: ' + strokes;
+    }
+    isDragging = false;
+  });
+
+  function update(){
+    if (!inHole) {
+      // Move
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      // Friction
+      ball.vx *= friction;
+      ball.vy *= friction;
+
+      // Wall collisions (simple rectangle)
+      if (ball.x - ball.r < 10) { ball.x = 10 + ball.r; ball.vx = -ball.vx * wallBounce; }
+      if (ball.x + ball.r > W - 10) { ball.x = W - 10 - ball.r; ball.vx = -ball.vx * wallBounce; }
+      if (ball.y - ball.r < 10) { ball.y = 10 + ball.r; ball.vy = -ball.vy * wallBounce; }
+      if (ball.y + ball.r > H - 10) { ball.y = H - 10 - ball.r; ball.vy = -ball.vy * wallBounce; }
+
+      // Check hole capture: inside hole and moving slowly
+      const d = Math.hypot(ball.x - hole.x, ball.y - hole.y);
+      const speed = Math.hypot(ball.vx, ball.vy);
+      if (d < hole.r - 1 && speed < 0.6) {
+        inHole = true;
+        // Snap into hole center
+        ball.x = hole.x; ball.y = hole.y;
+        ball.vx = 0; ball.vy = 0;
+        statusLabel.textContent = 'Holed out in ' + strokes + (strokes === 1 ? ' stroke!' : ' strokes!');
+      }
+
+      // Stop tiny motion
+      if (speed < stopEps) { ball.vx = 0; ball.vy = 0; }
+    }
+  }
+
+  function draw(){
+    // background (light green fairway already from CSS on canvas, but we’ll draw course)
+    ctx.clearRect(0, 0, W, H);
+
+    // Outer margins / walls
+    ctx.strokeStyle = '#335533';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, W - 20, H - 20);
+
+    // Simple obstacles (retro rectangles)
+    ctx.fillStyle = '#b6d8a8';
+    ctx.fillRect(W/2 - 60, H/2 - 8, 120, 16); // a bar in the middle
+
+    // Hole
+    ctx.beginPath();
+    ctx.fillStyle = '#333';
+    ctx.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ball
+    ctx.beginPath();
+    ctx.fillStyle = '#fff';
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#666';
+    ctx.stroke();
+
+    // Aim line (when dragging)
+    if (isDragging) {
+      ctx.beginPath();
+      ctx.setLineDash([5, 5]);
+      ctx.moveTo(ball.x, ball.y);
+      const mouse = dragStart;
+      // show pull-back direction from current mouse position
+      ctx.lineTo(mouse.x, mouse.y);
+      ctx.strokeStyle = '#224422';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  resetBall();
+  loop();
+})();
+</script>
+
+</body>
+</html>
