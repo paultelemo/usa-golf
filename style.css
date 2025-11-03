@@ -81,3 +81,35 @@ a.team-link:hover {
   background-color: #b0d69d;
   text-decoration: underline;
 }
+
+/* Responsive retro gallery */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  justify-items: center;
+  align-items: start;
+}
+
+.thumb {
+  background: #e6f0dc;
+  border: 1px solid #666;
+  padding: 6px;
+  width: 100%;
+  max-width: 220px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.thumb img {
+  width: 100%;
+  height: auto;
+  border: 1px solid #555;
+  background: #fff;
+}
+
+.caption {
+  margin-top: 6px;
+  font-size: 12px;
+  word-break: break-word;
+}
