@@ -5,6 +5,9 @@
   <title>Can you win the USA jacket?</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="style.css">
+  <style>
+    canvas { touch-action: none; } /* prevent page scroll while dragging */
+  </style>
 </head>
 <body>
 
@@ -36,318 +39,168 @@
 (function(){
   const canvas = document.getElementById('course');
   const ctx = canvas.getContext('2d');
-
-  // Course dimensions
   const W = canvas.width;
   const H = canvas.height;
 
-  // Hole settings
-  const hole = { x: W - 120, y: H/2, r: 14 };
+  const hole = { x: W - 120, y: H / 2, r: 14 };
+  const ball = { x: 120, y: H / 2, r: 7, vx: 0, vy: 0 };
 
-  // Ball settings
-  const ball = { x: 120, y: H/2, r: 7, vx: 0, vy: 0 };
-
-  // Physics
-  const friction = 0.985;     // velocity decay
-  const wallBounce = 0.85;    // energy retained after a wall bounce
-  const speedCap = 12;        // max initial speed
-  const stopEps = 0.05;       // threshold to consider stopped
-
-  // State
-  let isDragging = false;
-  let dragStart = { x: 0, y: 0 };
-  let hasShot = false;        // ONE shot only
-  let outcome = null;         // 'win' | 'lose' | null
-  let strokes = 0;
+  const friction = 0.985, wallBounce = 0.85, speedCap = 12, stopEps = 0.05;
+  let isDragging = false, dragStart = {x:0,y:0}, pointerPos = null;
+  let hasShot = false, outcome = null, strokes = 0;
 
   const strokeLabel = document.getElementById('strokeLabel');
   const statusLabel = document.getElementById('statusLabel');
-  const resetBtn = document.getElementById('resetBtn');
-  resetBtn.addEventListener('click', resetBall);
+  document.getElementById('resetBtn').addEventListener('click', resetBall);
 
   function resetBall(){
-    ball.x = 120; ball.y = H/2;
-    ball.vx = 0; ball.vy = 0;
-    strokes = 0;
-    hasShot = false;
-    outcome = null;
+    ball.x = 120; ball.y = H/2; ball.vx = ball.vy = 0;
+    strokes = 0; hasShot = false; outcome = null;
     statusLabel.textContent = '';
-    strokeLabel.textContent = 'Strokes: ' + strokes;
+    strokeLabel.textContent = 'Strokes: 0';
   }
 
-  // Mouse helpers
-  function getMousePos(evt){
+  function getPointerPos(evt){
     const rect = canvas.getBoundingClientRect();
     return {
       x: (evt.clientX - rect.left) * (canvas.width / rect.width),
-      y: (evt.clientY - rect.top)  * (canvas.height / rect.height)
+      y: (evt.clientY - rect.top) * (canvas.height / rect.height)
     };
   }
 
-  canvas.addEventListener('mousedown', (e) => {
-    if (outcome) return;           // game over
-    if (hasShot) return;           // only one shot allowed
-    // only allow shot if ball is stopped
-    if (Math.hypot(ball.vx, ball.vy) < 0.2) {
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // === Pointer event handlers (works on phone + mouse) ===
+  canvas.addEventListener('pointerdown', (e) => {
+    if (outcome || hasShot) return;
+    if (Math.hypot(ball.vx, ball.vy) >= 0.2) return;
+    const p = getPointerPos(e);
+    pointerPos = p;
+    if (Math.hypot(p.x - ball.x, p.y - ball.y) <= ball.r + 16) {
       isDragging = true;
-      dragStart = getMousePos(e);
+      dragStart = p;
+      canvas.setPointerCapture(e.pointerId);
     }
   });
 
-  canvas.addEventListener('mouseup', (e) => {
+  canvas.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    pointerPos = getPointerPos(e);
+  });
+
+  canvas.addEventListener('pointerup', (e) => {
     if (!isDragging || outcome || hasShot) return;
-    const end = getMousePos(e);
-
-    // Only shoot if mouse started near the ball
-    if (Math.hypot(dragStart.x - ball.x, dragStart.y - ball.y) <= ball.r + 16) {
-      let vx = (dragStart.x - end.x) * 0.08;
-      let vy = (dragStart.y - end.y) * 0.08;
-      // Cap speed
-      const sp = Math.hypot(vx, vy);
-      if (sp > speedCap) {
-        vx *= speedCap / sp;
-        vy *= speedCap / sp;
-      }
-      ball.vx = vx; ball.vy = vy;
-      strokes = 1;
-      strokeLabel.textContent = 'Strokes: 1';
-      hasShot = true;             // ONE shot taken
-    }
+    const end = pointerPos || getPointerPos(e);
+    let vx = (dragStart.x - end.x) * 0.08;
+    let vy = (dragStart.y - end.y) * 0.08;
+    const sp = Math.hypot(vx, vy);
+    if (sp > speedCap) { vx *= speedCap / sp; vy *= speedCap / sp; }
+    ball.vx = vx; ball.vy = vy;
+    strokes = 1; hasShot = true;
+    strokeLabel.textContent = 'Strokes: 1';
     isDragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch {}
   });
 
+  canvas.addEventListener('pointercancel', (e) => {
+    isDragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch {}
+  });
+
+  // === Game logic ===
   function update(){
     if (outcome) return;
 
-    // Move
-    ball.x += ball.vx;
-    ball.y += ball.vy;
+    ball.x += ball.vx; ball.y += ball.vy;
+    ball.vx *= friction; ball.vy *= friction;
 
-    // Friction
-    ball.vx *= friction;
-    ball.vy *= friction;
-
-    // Walls
     if (ball.x - ball.r < 10) { ball.x = 10 + ball.r; ball.vx = -ball.vx * wallBounce; }
     if (ball.x + ball.r > W - 10) { ball.x = W - 10 - ball.r; ball.vx = -ball.vx * wallBounce; }
     if (ball.y - ball.r < 10) { ball.y = 10 + ball.r; ball.vy = -ball.vy * wallBounce; }
     if (ball.y + ball.r > H - 10) { ball.y = H - 10 - ball.r; ball.vy = -ball.vy * wallBounce; }
 
-    // Check hole capture (snap if slow enough within hole)
     const d = Math.hypot(ball.x - hole.x, ball.y - hole.y);
     const speed = Math.hypot(ball.vx, ball.vy);
     if (d < hole.r - 1 && speed < 0.6) {
-      // Holed
-      ball.x = hole.x; ball.y = hole.y;
-      ball.vx = 0; ball.vy = 0;
       outcome = 'win';
+      ball.x = hole.x; ball.y = hole.y; ball.vx = ball.vy = 0;
       statusLabel.textContent = 'YOU WON';
     }
-
-    // If player has taken the single shot and the ball fully stops without holing → lose
     if (!outcome && hasShot && speed < stopEps) {
-      ball.vx = 0; ball.vy = 0;
       outcome = 'lose';
+      ball.vx = ball.vy = 0;
       statusLabel.textContent = 'YOU LOSE';
     }
   }
 
-  // ----- Drawing helpers -----
-  function drawUSFlag(x, y, w, h){
-    // Background (white)
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(x, y, w, h);
-    // Red stripes
-    ctx.fillStyle = '#b22234';
-    const stripeH = h / 13;
-    for (let i = 0; i < 13; i += 2) {
-      ctx.fillRect(x, y + i * stripeH, w, stripeH);
-    }
-    // Blue canton
-    const cantonW = w * 0.4;
-    const cantonH = stripeH * 7;
-    ctx.fillStyle = '#3c3b6e';
-    ctx.fillRect(x, y, cantonW, cantonH);
-    // Simple white dots as "stars"
-    ctx.fillStyle = '#fff';
-    const rows = 5, cols = 6;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const sx = x + (c + 0.6) * (cantonW / cols);
-        const sy = y + (r + 0.6) * (cantonH / rows);
-        ctx.beginPath();
-        ctx.arc(sx, sy, Math.min(w,h) * 0.006, 0, Math.PI * 2);
-        ctx.fill();
-      }
+  // === Flag drawing ===
+  function drawUSFlag(x,y,w,h){
+    ctx.fillStyle='#fff';ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='#b22234';const stripe=h/13;
+    for(let i=0;i<13;i+=2)ctx.fillRect(x,y+i*stripe,w,stripe);
+    const cw=w*0.4,ch=stripe*7;ctx.fillStyle='#3c3b6e';ctx.fillRect(x,y,cw,ch);
+    ctx.fillStyle='#fff';for(let r=0;r<5;r++)for(let c=0;c<6;c++){
+      const sx=x+(c+0.6)*(cw/6),sy=y+(r+0.6)*(ch/5);
+      ctx.beginPath();ctx.arc(sx,sy,Math.min(w,h)*0.006,0,2*Math.PI);ctx.fill();
     }
   }
-
-  // Helper: 5-point star
-function drawStar(ctx, cx, cy, outerR, innerR, fillStyle){
-  ctx.save();
-  ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const a = -Math.PI/2 + i * (Math.PI/5);
-    const r = (i % 2 === 0) ? outerR : innerR;
-    const x = cx + r * Math.cos(a);
-    const y = cy + r * Math.sin(a);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  function drawStar(cx,cy,outerR,innerR,fill){
+    ctx.beginPath();
+    for(let i=0;i<10;i++){
+      const a=-Math.PI/2+i*(Math.PI/5);
+      const r=i%2===0?outerR:innerR;
+      const x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);
+      i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+    }
+    ctx.closePath();ctx.fillStyle=fill;ctx.fill();
   }
-  ctx.closePath();
-  ctx.fillStyle = fillStyle;
-  ctx.fill();
-  ctx.restore();
-}
-
-// Improved USSR flag
-function drawSovietFlag(x, y, w, h){
-  const GOLD = '#ffd700';
-  const RED  = '#cc0000';
-
-  // Red field
-  ctx.fillStyle = RED;
-  ctx.fillRect(x, y, w, h);
-
-  // Emblem layout (scale relative to flag size, placed near hoist)
-  const S = Math.min(w, h);
-  const ex = x + w * 0.18;      // emblem anchor (left-ish)
-  const ey = y + h * 0.30;      // emblem anchor (upper third)
-
-  // --- Sickle (crescent) using two circles: big gold circle minus smaller red offset ---
-  const R_outer = 0.24 * S;     // outer (gold) radius
-  const R_inner = 0.19 * S;     // carving (red) radius
-  const cresX   = ex + 0.14 * S;
-  const cresY   = ey + 0.02 * S;
-
-  // Gold disk
-  ctx.beginPath();
-  ctx.arc(cresX, cresY, R_outer, 0, Math.PI * 2);
-  ctx.fillStyle = GOLD;
-  ctx.fill();
-
-  // Carve inner crescent with red disk (offset to create crescent shape)
-  ctx.beginPath();
-  ctx.arc(cresX + 0.10 * S, cresY - 0.06 * S, R_inner, 0, Math.PI * 2);
-  ctx.fillStyle = RED;
-  ctx.fill();
-
-  // --- Hammer (handle + head), rotated slightly ---
-  // Handle
-  ctx.save();
-  ctx.translate(ex + 0.20 * S, ey + 0.14 * S);
-  ctx.rotate(-25 * Math.PI / 180);
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(-0.015 * S, -0.02 * S, 0.03 * S, 0.36 * S); // thin vertical-ish bar
-  ctx.restore();
-
-  // Head (rectangle) + face (small square)
-  ctx.save();
-  ctx.translate(ex + 0.14 * S, ey - 0.02 * S);
-  ctx.rotate(-25 * Math.PI / 180);
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(0, 0, 0.18 * S, 0.055 * S);                  // hammer head
-  ctx.fillRect(-0.03 * S, 0.01 * S, 0.045 * S, 0.045 * S);  // hammer face (square)
-  ctx.restore();
-
-  // --- Star above the emblem ---
-  const starCX = ex + 0.12 * S;
-  const starCY = ey - 0.20 * S;
-  drawStar(ctx, starCX, starCY, 0.07 * S, 0.03 * S, GOLD);
-
-  // Optional: slight gold outline for emblem crispness (subtle)
-  ctx.save();
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = Math.max(1, S * 0.004);
-  // outline the crescent outer curve
-  ctx.beginPath();
-  ctx.arc(cresX, cresY, R_outer, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-}
+  function drawSovietFlag(x,y,w,h){
+    const GOLD='#ffd700',RED='#cc0000';
+    ctx.fillStyle=RED;ctx.fillRect(x,y,w,h);
+    const S=Math.min(w,h),ex=x+w*0.18,ey=y+h*0.3;
+    const R_outer=0.24*S,R_inner=0.19*S,cx=ex+0.14*S,cy=ey+0.02*S;
+    ctx.beginPath();ctx.arc(cx,cy,R_outer,0,2*Math.PI);ctx.fillStyle=GOLD;ctx.fill();
+    ctx.beginPath();ctx.arc(cx+0.1*S,cy-0.06*S,R_inner,0,2*Math.PI);ctx.fillStyle=RED;ctx.fill();
+    ctx.save();ctx.translate(ex+0.2*S,ey+0.14*S);ctx.rotate(-25*Math.PI/180);
+    ctx.fillStyle=GOLD;ctx.fillRect(-0.015*S,-0.02*S,0.03*S,0.36*S);ctx.restore();
+    ctx.save();ctx.translate(ex+0.14*S,ey-0.02*S);ctx.rotate(-25*Math.PI/180);
+    ctx.fillStyle=GOLD;ctx.fillRect(0,0,0.18*S,0.055*S);ctx.fillRect(-0.03*S,0.01*S,0.045*S,0.045*S);ctx.restore();
+    drawStar(ex+0.12*S,ey-0.2*S,0.07*S,0.03*S,GOLD);
+  }
 
   function drawOverlay(){
-    if (!outcome) return;
-
-    // Dim background
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(0, 0, W, H);
-
-    const fw = Math.min(W*0.5, 360);
-    const fh = Math.min(H*0.35, 200);
-    const fx = (W - fw)/2;
-    const fy = (H - fh)/2;
-
-    // Flag + text panel
-    ctx.fillStyle = '#f4faef';
-    ctx.fillRect(fx, fy, fw, fh);
-    ctx.strokeStyle = '#334';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(fx, fy, fw, fh);
-
-    // Draw flag
-    const pad = 12;
-    const flagW = fw - pad*2;
-    const flagH = fh * 0.55;
-    if (outcome === 'win') drawUSFlag(fx + pad, fy + pad, flagW, flagH);
-    else drawSovietFlag(fx + pad, fy + pad, flagW, flagH);
-
-    // Text
-    ctx.fillStyle = outcome === 'win' ? '#063' : '#800';
-    ctx.font = 'bold 28px "Times New Roman", serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(outcome === 'win' ? 'YOU WON' : 'YOU LOSE', W/2, fy + flagH + pad + 34);
+    if(!outcome)return;
+    ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(0,0,W,H);
+    const fw=Math.min(W*0.5,360),fh=Math.min(H*0.35,200);
+    const fx=(W-fw)/2,fy=(H-fh)/2;
+    ctx.fillStyle='#f4faef';ctx.fillRect(fx,fy,fw,fh);
+    ctx.strokeStyle='#334';ctx.lineWidth=2;ctx.strokeRect(fx,fy,fw,fh);
+    const pad=12,flagW=fw-pad*2,flagH=fh*0.55;
+    if(outcome==='win')drawUSFlag(fx+pad,fy+pad,flagW,flagH);
+    else drawSovietFlag(fx+pad,fy+pad,flagW,flagH);
+    ctx.fillStyle=outcome==='win'?'#063':'#800';
+    ctx.font='bold 28px "Times New Roman",serif';
+    ctx.textAlign='center';
+    ctx.fillText(outcome==='win'?'YOU WON':'YOU LOSE',W/2,fy+flagH+pad+34);
   }
 
   function draw(){
-    // Clear
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle='#335533';ctx.lineWidth=2;ctx.strokeRect(10,10,W-20,H-20);
+    ctx.fillStyle='#b6d8a8';ctx.fillRect(W/2-60,H/2-8,120,16);
+    ctx.beginPath();ctx.fillStyle='#333';ctx.arc(hole.x,hole.y,hole.r,0,2*Math.PI);ctx.fill();
+    ctx.beginPath();ctx.fillStyle='#fff';ctx.arc(ball.x,ball.y,ball.r,0,2*Math.PI);ctx.fill();ctx.strokeStyle='#666';ctx.stroke();
 
-    // Walls
-    ctx.strokeStyle = '#335533';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, W - 20, H - 20);
-
-    // Simple obstacle
-    ctx.fillStyle = '#b6d8a8';
-    ctx.fillRect(W/2 - 60, H/2 - 8, 120, 16);
-
-    // Hole
-    ctx.beginPath();
-    ctx.fillStyle = '#333';
-    ctx.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Ball
-    ctx.beginPath();
-    ctx.fillStyle = '#fff';
-    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#666';
-    ctx.stroke();
-
-    // Aim line (allowed only before first shot)
-    if (isDragging && !hasShot && !outcome) {
-      ctx.beginPath();
-      ctx.setLineDash([5, 5]);
-      ctx.moveTo(ball.x, ball.y);
-      ctx.lineTo(dragStart.x, dragStart.y);
-      ctx.strokeStyle = '#224422';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.setLineDash([]);
+    if(isDragging&&!hasShot&&!outcome&&pointerPos){
+      ctx.beginPath();ctx.setLineDash([5,5]);
+      ctx.moveTo(ball.x,ball.y);ctx.lineTo(pointerPos.x,pointerPos.y);
+      ctx.strokeStyle='#224422';ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);
     }
-
     drawOverlay();
   }
 
-  function loop(){
-    update();
-    draw();
-    requestAnimationFrame(loop);
-  }
-
-  resetBall();
-  loop();
+  function loop(){ update(); draw(); requestAnimationFrame(loop); }
+  resetBall(); loop();
 })();
 </script>
 
